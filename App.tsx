@@ -1,22 +1,21 @@
-import React from 'react';
+import React, { lazy, Suspense } from 'react';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
-import ProtectedLayout from './pages/ProtectedLayout';
+import ProtectedLayout from './components/ProtectedLayout';
 import Login from './pages/Login';
-import Dashboard from './pages/Dashboard';
-import Ventes from './pages/Ventes';
-import Commande from './pages/Commande';
-import Cuisine from './pages/Cuisine';
-import ParaLlevar from './pages/ParaLlevar';
-import Ingredients from './pages/Ingredients';
-import Produits from './pages/Produits';
-import CommandeClient from './pages/CommandeClient';
-import NotFound from './pages/NotFound';
-import ResumeVentes from './pages/ResumeVentes';
-import SiteCustomization from './pages/SiteCustomization';
 import { SITE_CUSTOMIZER_PERMISSION_KEY } from './constants';
 import { getHomeRedirectPath, isPermissionGranted } from './utils/navigation';
 import NoAccess from './components/NoAccess';
+
+const Dashboard = lazy(() => import('./pages/Dashboard'));
+const Ventes = lazy(() => import('./pages/Ventes'));
+const Commande = lazy(() => import('./pages/Commande'));
+const Cuisine = lazy(() => import('./pages/Cuisine'));
+const ParaLlevar = lazy(() => import('./pages/ParaLlevar'));
+const Ingredients = lazy(() => import('./pages/Ingredients'));
+const Produits = lazy(() => import('./pages/Produits'));
+const ResumeVentes = lazy(() => import('./pages/ResumeVentes'));
+const SiteCustomization = lazy(() => import('./pages/SiteCustomization'));
 
 const LoadingScreen: React.FC = () => (
   <div className="flex items-center justify-center h-screen">
@@ -82,7 +81,6 @@ const AppRoutes: React.FC = () => (
   <Routes>
     <Route path="/" element={<RootRoute />} />
     <Route path="/login" element={<Navigate to="/" replace />} />
-    <Route path="/commande-client" element={<CommandeClient />} />
 
     <Route element={<ProtectedAppShell />}>
       <Route
@@ -159,7 +157,7 @@ const AppRoutes: React.FC = () => (
       />
     </Route>
 
-    <Route path="*" element={<NotFound />} />
+    <Route path="*" element={<p>404</p>} />
   </Routes>
 );
 
@@ -168,7 +166,9 @@ const App: React.FC = () => {
   return (
     <AuthProvider>
       <BrowserRouter>
-        <AppRoutes />
+        <Suspense fallback={<LoadingScreen />}>
+          <AppRoutes />
+        </Suspense>
       </BrowserRouter>
     </AuthProvider>
   );

@@ -73,14 +73,14 @@ export const createHeroBackgroundStyle = (
   return base;
 };
 
-export const createTextStyle = (style: SectionStyle): CSSProperties => ({
-  color: style.textColor,
-  fontFamily: formatFontFamily(style.fontFamily),
+export const createTextStyle = (style: SectionStyle, globalStyle?: SiteContent["globalStyle"]): CSSProperties => ({
+  color: style.textColor ?? globalStyle?.primaryColor,
+  fontFamily: formatFontFamily(style.fontFamily ?? globalStyle?.fontFamily),
 });
 
-export const createBodyTextStyle = (style: SectionStyle): CSSProperties => ({
-  ...createTextStyle(style),
-  fontSize: style.fontSize,
+export const createBodyTextStyle = (style: SectionStyle, globalStyle?: SiteContent["globalStyle"]): CSSProperties => ({
+  ...createTextStyle(style, globalStyle),
+  fontSize: style.fontSize ?? globalStyle?.fontSize,
 });
 
 export const createElementTextStyle = (

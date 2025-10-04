@@ -2,7 +2,7 @@
   "name": "ouiouitacos_pos",
   "private": true,
   "version": "0.0.0",
-  "type": "module",
+
   "scripts": {
     "dev": "vite",
     "build": "vite build",
@@ -10,21 +10,19 @@
     "test": "vitest"
   },
   "dependencies": {
+    "@netlify/functions": "^2.6.0",
     "@supabase/supabase-js": "^2.47.12",
+    "lucide-react": "^0.544.0",
     "react": "^19.1.1",
     "react-dom": "^19.1.1",
     "react-router-dom": "^7.9.1",
-    "lucide-react": "^0.544.0",
-    "recharts": "^3.2.1"
+    "recharts": "^3.2.1",
+    "zod": "^4.1.11"
   },
   "devDependencies": {
     "@types/node": "^22.14.0",
     "@vitejs/plugin-react": "^5.0.0",
-    "autoprefixer": "^10.4.20",
-    "postcss": "^8.4.49",
-    "tailwindcss": "^3.4.16",
-    "typescript": "~5.8.2",
     "vite": "^6.2.0",
-    "vitest": "^2.1.5"
+    "vitest": "^3.2.4"
   }
 }

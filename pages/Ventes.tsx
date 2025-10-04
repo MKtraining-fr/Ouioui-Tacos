@@ -73,14 +73,14 @@ const getTableStatus = (table: Table): StatusDescriptor => {
   }
 };
 
-const TableCard: React.FC<{
+const TableCard = React.memo<{
   table: Table;
   onServe: (orderId: string) => void;
   canEdit: boolean;
   onEdit?: (table: Table) => void;
   onDelete?: (table: Table) => Promise<void> | void;
   isDeleting?: boolean;
-}> = ({ table, onServe, canEdit, onEdit, onDelete, isDeleting }) => {
+}>(({ table, onServe, canEdit, onEdit, onDelete, isDeleting }) => {
   const navigate = useNavigate();
   const { text, statusClass, Icon } = getTableStatus(table);
   const [isMenuOpen, setIsMenuOpen] = useState(false);
@@ -162,7 +162,7 @@ const TableCard: React.FC<{
             type="button"
             onClick={handleMenuToggle}
             className="flex h-9 w-9 items-center justify-center rounded-full text-gray-500 transition hover:bg-gray-100 hover:text-gray-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary-500 disabled:cursor-not-allowed disabled:opacity-60"
-            aria-haspopup="menu"
+            aria-haspopup="true"
             aria-expanded={isMenuOpen}
             aria-label="Options de la table"
             disabled={isDeleting}
@@ -175,6 +175,7 @@ const TableCard: React.FC<{
                 type="button"
                 onClick={handleEditClick}
                 className="flex w-full items-center gap-2 px-3 py-2 text-left text-gray-700 transition hover:bg-gray-100"
+                aria-label="Modifier la table"
               >
                 <Pencil size={16} />
                 Modifier
@@ -184,6 +185,7 @@ const TableCard: React.FC<{
                 onClick={handleDeleteClick}
                 className="flex w-full items-center gap-2 px-3 py-2 text-left text-red-600 transition hover:bg-red-50 disabled:cursor-not-allowed disabled:opacity-60"
                 disabled={isDeleting}
+                aria-label={isDeleting ? 'Suppression de la table en cours…' : 'Supprimer la table'}
               >
                 <Trash2 size={16} />
                 {isDeleting ? 'Suppression…' : 'Supprimer'}
@@ -222,7 +224,7 @@ const TableCard: React.FC<{
       </div>
     </div>
   );
-};
+});
 
 const Ventes: React.FC = () => {
   const { role } = useAuth();
@@ -237,14 +239,31 @@ const Ventes: React.FC = () => {
   const [modalMode, setModalMode] = useState<'create' | 'edit'>('create');
   const [selectedTable, setSelectedTable] = useState<Table | null>(null);
   const [deletingTableId, setDeletingTableId] = useState<string | null>(null);
+  const [page, setPage] = useState(0);
+  const [hasMore, setHasMore] = useState(true);
+  const limit = 20; // Nombre de tables à charger par page
+
   const fetchIdRef = useRef(0);
 
-  const fetchTables = useCallback(async () => {
+  const fetchTables = useCallback(async (reset = false) => {
     const fetchId = ++fetchIdRef.current;
+    if (reset) {
+      setLoading(true);
+      setPage(0);
+      setTables([]);
+      setHasMore(true);
+    }
+
+    if (!hasMore && !reset) {
+      setLoading(false);
+      return;
+    }
+
     try {
-      const data = await api.getTables();
+      const data = await api.getTables(reset ? 0 : page, limit);
       if (fetchId === fetchIdRef.current) {
-        setTables(data);
+        setTables(prevTables => (reset ? data : [...prevTables, ...data]));
+        setHasMore(data.length === limit);
         setFetchError(null);
       }
     } catch (error) {
@@ -257,18 +276,21 @@ const Ventes: React.FC = () => {
         setLoading(false);
       }
     }
-  }, []);
+  }, [page, hasMore]);
 
   useEffect(() => {
-    setLoading(true);
-    fetchTables();
-    const interval = setInterval(fetchTables, 10000);
-    const unsubscribe = api.notifications.subscribe('orders_updated', fetchTables);
+    fetchTables(true);
+    const interval = setInterval(() => fetchTables(true), 10000); // Rafraîchir toutes les 10 secondes
+    const unsubscribe = api.notifications.subscribe('orders_updated', () => fetchTables(true));
     return () => {
       clearInterval(interval);
       unsubscribe();
     };
   }, [fetchTables]);
+
+  const handleLoadMore = useCallback(() => {
+    setPage(prevPage => prevPage + 1);
+  }, []);
 
   const handleModalClose = useCallback(() => {
     setIsModalOpen(false);
@@ -311,7 +333,7 @@ const Ventes: React.FC = () => {
           successMessage = 'Table mise à jour avec succès.';
         }
 
-        await fetchTables();
+        await fetchTables(true); // Recharger toutes les tables après modification/création
         handleModalClose();
         setActionSuccess(successMessage);
       } catch (error) {
@@ -339,7 +361,7 @@ const Ventes: React.FC = () => {
 
       try {
         await api.deleteTable(table.id);
-        await fetchTables();
+        await fetchTables(true); // Recharger toutes les tables après suppression
         setActionSuccess('Table supprimée avec succès.');
       } catch (error) {
         console.error('Failed to delete table:', error);
@@ -357,7 +379,7 @@ const Ventes: React.FC = () => {
       setActionSuccess(null);
       try {
         await api.markOrderAsServed(orderId);
-        await fetchTables();
+        await fetchTables(true); // Recharger toutes les tables après avoir servi une commande
       } catch (error) {
         console.error('Failed to mark order as served:', error);
         setActionError('Impossible de marquer la commande comme servie. Veuillez réessayer.');
@@ -366,7 +388,7 @@ const Ventes: React.FC = () => {
     [fetchTables],
   );
 
-  if (loading) {
+  if (loading && tables.length === 0) {
     return <p className="section-text section-text--muted">Chargement du plan de salle...</p>;
   }
 
@@ -420,6 +442,19 @@ const Ventes: React.FC = () => {
         ))}
       </div>
 
+      {hasMore && (
+        <div className="flex justify-center mt-6">
+          <button
+            type="button"
+            onClick={handleLoadMore}
+            className="ui-btn ui-btn-secondary"
+            disabled={loading}
+          >
+            {loading ? 'Chargement...' : 'Charger plus de tables'}
+          </button>
+        </div>
+      )}
+
       <TableModal
         isOpen={isModalOpen}
         onClose={handleModalClose}
@@ -430,6 +465,7 @@ const Ventes: React.FC = () => {
       />
     </div>
   );
-};
+});
 
 export default Ventes;
+

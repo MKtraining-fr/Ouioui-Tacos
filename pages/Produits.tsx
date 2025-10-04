@@ -1,5 +1,3 @@
-
-
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { api } from '../services/api';
@@ -192,12 +190,12 @@ const Produits: React.FC = () => {
             )}
         </div>
     );
-};
+});
 
 
 // --- Child Components ---
 
-const ProductCard: React.FC<{ product: Product; category?: Category; onEdit: () => void; onDelete: () => void; onStatusChange: (product: Product, newStatus: Product['estado']) => void; canEdit: boolean; }> = ({ product, category, onEdit, onDelete, onStatusChange, canEdit }) => {
+const ProductCard = React.memo(({ product, category, onEdit, onDelete, onStatusChange, canEdit }: { product: Product; category?: Category; onEdit: () => void; onDelete: () => void; onStatusChange: (product: Product, newStatus: Product["estado"]) => void; canEdit: boolean; }) => {
     const { text, color, Icon } = getStatusInfo(product.estado);
     const [menuOpen, setMenuOpen] = useState(false);
     
@@ -207,7 +205,7 @@ const ProductCard: React.FC<{ product: Product; category?: Category; onEdit: () 
     return (
         <div className="ui-card flex flex-col overflow-hidden">
             <div className="relative">
-                <img src={product.image} alt={product.nom_produit} className="w-full h-40 object-cover" />
+                <img src={resolveProductImageUrl(product.image, 300, 160)} alt={product.nom_produit} className="w-full h-40 object-cover" />
                 {product.is_best_seller && (
                     <span className="absolute top-2 left-2 rounded-full bg-brand-primary/90 px-3 py-1 text-xs font-semibold uppercase tracking-wide text-white shadow-md">
                         Best seller{product.best_seller_rank ? ` #${product.best_seller_rank}` : ''}
@@ -230,7 +228,13 @@ const ProductCard: React.FC<{ product: Product; category?: Category; onEdit: () 
                     </span>
                     {canEdit && (
                         <div className="relative">
-                            <button onClick={() => setMenuOpen(!menuOpen)} className="p-1 text-gray-500 hover:text-gray-800"><MoreVertical size={20} /></button>
+                            <button
+                                onClick={() => setMenuOpen(!menuOpen)}
+                                className="p-1 text-gray-500 hover:text-gray-800"
+                                aria-haspopup="true"
+                                aria-expanded={menuOpen}
+                                aria-label="Options du produit"
+                            ><MoreVertical size={20} /></button>
                             {menuOpen && (
                                 <div className="absolute right-0 bottom-full mb-2 w-48 bg-white rounded-md shadow-lg z-10 border">
                                     <button onClick={() => { onEdit(); setMenuOpen(false); }} className="block w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100">Modifier</button>
@@ -250,8 +254,7 @@ const ProductCard: React.FC<{ product: Product; category?: Category; onEdit: () 
             </div>
         </div>
     );
-};
-
+});
 
 type ProductFormState = {
     nom_produit: string;
@@ -347,323 +350,286 @@ const AddEditProductModal: React.FC<{ isOpen: boolean; onClose: () => void; onSu
     const handleRecipeChange = (
         index: number,
         field: keyof RecipeItem,
-        event: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>,
+        value: string | number
     ) => {
-        const newRecipe = [...formData.recipe];
-        if (field === 'qte_utilisee') {
-            const { valueAsNumber, value } = event.currentTarget;
-            const normalizedValue = Number.isNaN(valueAsNumber) ? Number(value.replace(',', '.')) : valueAsNumber;
-            newRecipe[index] = {
-                ...newRecipe[index],
-                [field]: Number.isNaN(normalizedValue) ? newRecipe[index].qte_utilisee : normalizedValue,
-            };
-        } else {
-            newRecipe[index] = { ...newRecipe[index], [field]: event.currentTarget.value };
+        const updatedRecipe = [...formData.recipe];
+        const numericValue = typeof value === 'string' ? parseFloat(value) : value;
+        if (!isNaN(numericValue)) {
+            (updatedRecipe[index] as any)[field] = numericValue;
+            setFormData({ ...formData, recipe: updatedRecipe });
         }
-        setFormData(prev => ({ ...prev, recipe: newRecipe }));
     };
 
     const addRecipeItem = () => {
-        if (ingredients.length === 0) return;
-        setFormData({ ...formData, recipe: [...formData.recipe, { ingredient_id: ingredients[0].id, qte_utilisee: 0 }] });
+        setFormData({
+            ...formData,
+            recipe: [...formData.recipe, { ingredient_id: '', qte_utilisee: 0 }]
+        });
     };
-    
+
     const removeRecipeItem = (index: number) => {
-        const newRecipe = formData.recipe.filter((_, i) => i !== index);
-        setFormData({ ...formData, recipe: newRecipe });
+        const updatedRecipe = formData.recipe.filter((_, i) => i !== index);
+        setFormData({ ...formData, recipe: updatedRecipe });
+    };
+
+    const handleImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+        if (e.target.files && e.target.files[0]) {
+            setImageFile(e.target.files[0]);
+        }
     };
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
-        if (formData.recipe.length === 0) {
-            alert("Veuillez ajouter au moins un ingrédient à la recette.");
-            return;
-        }
-        if (formData.is_best_seller) {
-            if (formData.best_seller_rank == null) {
-                alert('Veuillez sélectionner une position de best seller disponible.');
-                return;
-            }
-            const occupant = occupiedPositions.get(formData.best_seller_rank);
-            if (occupant && occupant.id !== product?.id) {
-                alert(`La position ${formData.best_seller_rank} est déjà occupée par ${occupant.nom_produit}.`);
-                return;
-            }
-        }
         setSubmitting(true);
+
         try {
-            let imageUrl = formData.image?.trim() ?? '';
+            let imageUrl = formData.image;
             if (imageFile) {
-                imageUrl = await uploadProductImage(imageFile, formData.nom_produit);
+                imageUrl = await uploadProductImage(imageFile);
             }
 
-            const finalData = {
+            const productData = {
                 ...formData,
+                cout_revient: recipeCost,
                 image: imageUrl,
-                is_best_seller: formData.is_best_seller,
-                best_seller_rank: formData.is_best_seller ? formData.best_seller_rank : null,
             };
 
-            if (mode === 'edit' && product) {
-                await api.updateProduct(product.id, finalData);
-            } else {
-                await api.addProduct(finalData as Omit<Product, 'id'>);
+            if (mode === 'add') {
+                await api.createProduct(productData);
+            } else if (product) {
+                await api.updateProduct(product.id, productData);
             }
+
             onSuccess();
-            setImageFile(null);
             onClose();
         } catch (error) {
-            console.error("Failed to save product", error);
-            const message = error instanceof Error ? error.message : "Une erreur inconnue s'est produite.";
-            alert(`Échec du téléversement de l'image du produit : ${message}`);
+            console.error('Failed to save product', error);
+            alert('Error saving product');
         } finally {
             setSubmitting(false);
         }
     };
 
+    const availableRanks = BEST_SELLER_RANKS.filter(rank => {
+        const occupant = occupiedPositions.get(rank);
+        return !occupant || (product && occupant.id === product.id);
+    });
+
     return (
-        <Modal isOpen={isOpen} onClose={onClose} title={mode === 'add' ? 'Ajouter un Produit' : 'Modifier le Produit'} size="lg">
+        <Modal isOpen={isOpen} onClose={onClose} title={`${mode === 'add' ? 'Ajouter' : 'Modifier'} un Produit`}>
             <form onSubmit={handleSubmit} className="space-y-4">
-                 <div className="max-h-[65vh] overflow-y-auto pr-2 space-y-4">
-                    <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-                        <div>
-                            <label className="block text-sm font-medium text-gray-700">Nom</label>
-                            <input type="text" value={formData.nom_produit} onChange={e => setFormData({...formData, nom_produit: e.target.value})} required className="mt-1 ui-input"/>
-                        </div>
-                        <div>
-                            <label className="block text-sm font-medium text-gray-700">Prix de vente</label>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <input
+                        type="text"
+                        placeholder="Nom du produit"
+                        value={formData.nom_produit}
+                        onChange={e => setFormData({ ...formData, nom_produit: e.target.value })}
+                        className="ui-input"
+                        required
+                    />
+                    <input
+                        type="number"
+                        placeholder="Prix de vente"
+                        value={formData.prix_vente}
+                        onChange={e => setFormData({ ...formData, prix_vente: parseFloat(e.target.value) || 0 })}
+                        className="ui-input"
+                        required
+                    />
+                    <select
+                        value={formData.categoria_id}
+                        onChange={e => setFormData({ ...formData, categoria_id: e.target.value })}
+                        className="ui-select"
+                        required
+                    >
+                        <option value="" disabled>Sélectionner une catégorie</option>
+                        {categories.map(cat => <option key={cat.id} value={cat.id}>{cat.nom}</option>)}
+                    </select>
+                    <select
+                        value={formData.estado}
+                        onChange={e => setFormData({ ...formData, estado: e.target.value as Product['estado'] })}
+                        className="ui-select"
+                        required
+                    >
+                        <option value="disponible">Disponible</option>
+                        <option value="agotado_temporal">Rupture (Temp.)</option>
+                        <option value="agotado_indefinido">Indisponible</option>
+                    </select>
+                </div>
+                <textarea
+                    placeholder="Description"
+                    value={formData.description}
+                    onChange={e => setFormData({ ...formData, description: e.target.value })}
+                    className="ui-textarea"
+                />
+                <div className="flex items-center gap-4">
+                    <input type="file" onChange={handleImageChange} className="ui-input" />
+                    {formData.image && !imageFile && <img src={resolveProductImageUrl(formData.image, 50, 50)} alt="Aperçu" className="w-12 h-12 object-cover rounded" />}
+                    {imageFile && <img src={URL.createObjectURL(imageFile)} alt="Aperçu" className="w-12 h-12 object-cover rounded" />}
+                </div>
+
+                <div className="space-y-2 pt-4 border-t">
+                    <h4 className="font-semibold">Recette & Coût de revient</h4>
+                    {formData.recipe.map((item, index) => (
+                        <div key={index} className="flex items-center gap-2">
+                            <select
+                                value={item.ingredient_id}
+                                onChange={e => handleRecipeChange(index, 'ingredient_id', e.target.value)}
+                                className="ui-select flex-grow"
+                            >
+                                <option value="" disabled>Choisir ingrédient</option>
+                                {ingredients.map(ing => <option key={ing.id} value={ing.id}>{ing.nom_ingredient} ({ing.unite})</option>)}
+                            </select>
                             <input
                                 type="number"
-                                step="0.01"
-                                min="0"
-                                value={formData.prix_vente}
-                                onChange={event => {
-                                    const { valueAsNumber, value } = event.currentTarget;
-                                    const normalizedValue = Number.isNaN(valueAsNumber)
-                                        ? Number(value.replace(',', '.'))
-                                        : valueAsNumber;
-                                    setFormData(prev => ({
-                                        ...prev,
-                                        prix_vente: Number.isNaN(normalizedValue) ? prev.prix_vente : normalizedValue,
-                                    }));
-                                }}
-                                required
-                                className="mt-1 ui-input"
+                                placeholder="Quantité"
+                                value={item.qte_utilisee}
+                                onChange={e => handleRecipeChange(index, 'qte_utilisee', e.target.value)}
+                                className="ui-input w-28"
                             />
+                            <button type="button" onClick={() => removeRecipeItem(index)} className="ui-btn-danger p-2"><Trash2 size={16} /></button>
                         </div>
-                        <div>
-                            <label className="block text-sm font-medium text-gray-700">Catégorie</label>
-                            <select value={formData.categoria_id} onChange={e => setFormData({...formData, categoria_id: e.target.value})} required className="mt-1 ui-select">
-                                {categories.map(c => <option key={c.id} value={c.id}>{c.nom}</option>)}
-                            </select>
-                        </div>
-                        <div>
-                            <label className="block text-sm font-medium text-gray-700">Statut</label>
-                            <select value={formData.estado} onChange={e => setFormData({...formData, estado: e.target.value as Product['estado']})} required className="mt-1 ui-select">
-                                <option value="disponible">Disponible</option>
-                                <option value="agotado_temporal">Rupture (Temp.)</option>
-                                <option value="agotado_indefinido">Indisponible</option>
-                            </select>
-                        </div>
-                        <div className="sm:col-span-2 flex items-center gap-2 pt-2">
-                            <input
-                                id="best-seller-toggle"
-                                type="checkbox"
-                                checked={formData.is_best_seller}
-                                onChange={event => handleBestSellerToggle(event.target.checked)}
-                                className="h-4 w-4 rounded border-gray-300 text-brand-primary focus:ring-brand-primary"
-                            />
-                            <label htmlFor="best-seller-toggle" className="text-sm font-medium text-gray-700">Best seller</label>
-                        </div>
-                        <div className="sm:col-span-2">
-                            <label className="block text-sm font-medium text-gray-700" htmlFor="best-seller-rank">Position dans le classement</label>
-                            <select
-                                id="best-seller-rank"
-                                value={formData.best_seller_rank ?? ''}
-                                onChange={handleBestSellerRankChange}
-                                disabled={!formData.is_best_seller}
-                                className="mt-1 ui-select"
-                            >
-                                <option value="">Sélectionner une position</option>
-                                {BEST_SELLER_RANKS.map(rank => {
-                                    const occupant = occupiedPositions.get(rank);
-                                    const isCurrentProduct = occupant?.id === product?.id;
-                                    const isDisabled = Boolean(occupant && !isCurrentProduct);
-                                    const label = occupant
-                                        ? isCurrentProduct
-                                            ? `${rank} – Position actuelle`
-                                            : `${rank} – Occupé par ${occupant.nom_produit}`
-                                        : `${rank}`;
-                                    return (
-                                        <option key={rank} value={rank} disabled={isDisabled}>
-                                            {label}
-                                        </option>
-                                    );
-                                })}
-                            </select>
-                            {formData.is_best_seller && formData.best_seller_rank === null && (
-                                <p className="mt-1 text-xs text-red-600">Sélectionnez une position disponible pour ce best seller.</p>
-                            )}
-                        </div>
+                    ))}
+                    <button type="button" onClick={addRecipeItem} className="ui-btn-secondary text-sm">Ajouter ingrédient</button>
+                    <div className="pt-2 text-sm font-medium text-gray-700">
+                        Coût de revient estimé: {formatCurrencyCOP(recipeCost)}
                     </div>
-
-                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 bg-gray-50 border border-gray-200 rounded-lg p-4 text-sm text-gray-700">
-                        <div>
-                            <p className="text-xs uppercase tracking-wide text-gray-500">Coût de revient</p>
-                            <p className="text-lg font-semibold text-gray-900">{formatCurrencyCOP(recipeCost)}</p>
-                        </div>
-                        <div>
-                            <p className="text-xs uppercase tracking-wide text-gray-500">Marge</p>
-                            <p className={`text-lg font-semibold ${marginValue >= 0 ? 'text-emerald-600' : 'text-red-600'}`}>{formatCurrencyCOP(marginValue)}</p>
-                        </div>
-                        <div>
-                            <p className="text-xs uppercase tracking-wide text-gray-500">Marge %</p>
-                            <p className={`text-lg font-semibold ${marginPercentage >= 0 ? 'text-emerald-600' : 'text-red-600'}`}>{Number.isFinite(marginPercentage) ? formatIntegerAmount(marginPercentage) : '0'}%</p>
-                        </div>
-                    </div>
-
-                    <div>
-                        <label className="block text-sm font-medium text-gray-700">Description</label>
-                        <textarea
-                            rows={3}
-                            value={formData.description}
-                            onChange={e => setFormData({...formData, description: e.target.value})}
-                            className="mt-1 ui-textarea"
-                            placeholder="Courte description du produit..."
-                        />
-                    </div>
-
-                    <div>
-                        <label className="block text-sm font-medium text-gray-700">Image du produit</label>
-                         <div className="mt-1 flex items-center gap-4">
-                            <img
-                                src={imageFile ? URL.createObjectURL(imageFile) : resolveProductImageUrl(formData.image)}
-                                alt="Aperçu"
-                                className="w-20 h-20 object-cover rounded-md bg-gray-100"
-                            />
-                             <label htmlFor="product-image-upload" className="cursor-pointer bg-white py-2 px-3 border border-gray-300 rounded-md shadow-sm text-sm leading-4 font-medium text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-brand-primary">
-                                 <div className="flex items-center gap-2">
-                                     <Upload size={16} />
-                                     <span>Changer l'image</span>
-                                 </div>
-                                <input id="product-image-upload" type="file" className="sr-only" onChange={e => setImageFile(e.target.files ? e.target.files[0] : null)} />
-                            </label>
-                         </div>
-                    </div>
-
-
-                    <div>
-                        <h4 className="text-md font-semibold text-gray-800 border-b pb-2 mb-2">Recette</h4>
-                        {formData.recipe.length === 0 && (
-                            <div className="text-center p-2 my-2 bg-red-50 border border-red-200 rounded-md">
-                                <p className="text-sm text-red-600">Un produit doit contenir au moins un ingrédient.</p>
-                            </div>
-                        )}
-                        <div className="space-y-2">
-                            {formData.recipe.map((item, index) => (
-                                <div key={index} className="flex items-center gap-2">
-                                    <GripVertical className="text-gray-400 cursor-move" size={16}/>
-                                    <select value={item.ingredient_id} onChange={event => handleRecipeChange(index, 'ingredient_id', event)} className="ui-select flex-grow">
-                                        {ingredients.map(i => <option key={i.id} value={i.id}>{i.nom}</option>)}
-                                    </select>
-                                    <input type="number" placeholder="Qté" value={item.qte_utilisee} onChange={event => handleRecipeChange(index, 'qte_utilisee', event)} className="ui-input w-24" />
-                                    <span className="text-gray-500 text-sm w-12">{ingredients.find(i => i.id === item.ingredient_id)?.unite === 'kg' ? 'g' : ingredients.find(i => i.id === item.ingredient_id)?.unite}</span>
-                                    <button type="button" onClick={() => removeRecipeItem(index)} className="p-1 text-red-500 hover:bg-red-100 rounded-full"><Trash2 size={16}/></button>
-                                </div>
-                            ))}
-                        </div>
-                        <button type="button" onClick={addRecipeItem} className="mt-2 text-sm text-blue-600 hover:underline">Ajouter un ingrédient</button>
+                    <div className="text-sm font-medium text-gray-700">
+                        Marge: {formatCurrencyCOP(marginValue)} ({marginPercentage.toFixed(2)}%)
                     </div>
                 </div>
 
-                <div className="flex flex-col sm:flex-row justify-end gap-3 pt-4 border-t">
-                    <button type="button" onClick={onClose} className="w-full sm:w-auto ui-btn-secondary py-3">Annuler</button>
-                    <button type="submit" disabled={isSubmitting || formData.recipe.length === 0} className="w-full sm:w-auto ui-btn-primary py-3 disabled:opacity-60">{isSubmitting ? 'Sauvegarde...' : 'Sauvegarder'}</button>
+                <div className="space-y-2 pt-4 border-t">
+                    <h4 className="font-semibold">Paramètres Best Seller</h4>
+                    <div className="flex items-center gap-2">
+                        <input
+                            type="checkbox"
+                            id="is_best_seller_toggle"
+                            checked={formData.is_best_seller}
+                            onChange={e => handleBestSellerToggle(e.target.checked)}
+                            className="h-4 w-4 rounded border-gray-300 text-brand-primary focus:ring-brand-primary"
+                        />
+                        <label htmlFor="is_best_seller_toggle" className="text-sm font-medium text-gray-900">Marquer comme Best Seller</label>
+                    </div>
+                    {formData.is_best_seller && (
+                        <select
+                            value={formData.best_seller_rank ?? ''}
+                            onChange={handleBestSellerRankChange}
+                            className="ui-select"
+                        >
+                            <option value="" disabled>Choisir un rang</option>
+                            {availableRanks.map(rank => (
+                                <option key={rank} value={rank}>Rang #{rank}</option>
+                            ))}
+                        </select>
+                    )}
+                </div>
+
+                <div className="flex justify-end gap-2 pt-4">
+                    <button type="button" onClick={onClose} className="ui-btn-secondary">Annuler</button>
+                    <button type="submit" className="ui-btn-primary" disabled={isSubmitting}>
+                        {isSubmitting ? 'Sauvegarde...' : 'Sauvegarder'}
+                    </button>
                 </div>
             </form>
         </Modal>
     );
-};
+});
 
-const ManageCategoriesModal: React.FC<{ isOpen: boolean; onClose: () => void; onSuccess: () => void; categories: Category[] }> = ({ isOpen, onClose, onSuccess, categories }) => {
+const ManageCategoriesModal: React.FC<{ isOpen: boolean; onClose: () => void; onSuccess: () => void; categories: Category[]; }> = ({ isOpen, onClose, onSuccess, categories }) => {
     const [newCategoryName, setNewCategoryName] = useState('');
-    const [error, setError] = useState('');
+    const [isSubmitting, setSubmitting] = useState(false);
 
-    const handleAdd = async () => {
+    const handleAddCategory = async () => {
         if (!newCategoryName.trim()) return;
+        setSubmitting(true);
         try {
-            await api.addCategory(newCategoryName);
+            await api.createCategory({ nom: newCategoryName });
             setNewCategoryName('');
             onSuccess();
-        } catch (err) { console.error(err); }
-    };
-    
-    const handleDelete = async (id: string) => {
-        setError('');
-        try {
-            await api.deleteCategory(id);
-            onSuccess();
-        } catch (err: any) {
-            setError(err.message);
-            console.error(err);
+        } catch (error) {
+            console.error('Failed to add category', error);
+            alert('Error adding category');
+        } finally {
+            setSubmitting(false);
         }
     };
-    
+
+    const handleDeleteCategory = async (id: string) => {
+        if (!confirm('Êtes-vous sûr de vouloir supprimer cette catégorie ?')) return;
+        try {
+            await api.deleteEntity('categories', id);
+            onSuccess();
+        } catch (error) {
+            console.error('Failed to delete category', error);
+            alert('Error deleting category');
+        }
+    };
+
     return (
         <Modal isOpen={isOpen} onClose={onClose} title="Gérer les Catégories">
             <div className="space-y-4">
-                <div className="flex gap-2">
-                    <input type="text" value={newCategoryName} onChange={e => setNewCategoryName(e.target.value)} placeholder="Nom de la nouvelle catégorie" className="ui-input flex-grow" />
-                    <button onClick={handleAdd} className="ui-btn-primary px-4">Ajouter</button>
+                <div>
+                    <h4 className="font-medium mb-2">Catégories existantes</h4>
+                    <ul className="space-y-2">
+                        {categories.map(cat => (
+                            <li key={cat.id} className="flex justify-between items-center bg-gray-50 p-2 rounded">
+                                <span>{cat.nom}</span>
+                                <button onClick={() => handleDeleteCategory(cat.id)} className="text-red-500 hover:text-red-700 p-1"><Trash2 size={16} /></button>
+                            </li>
+                        ))}
+                    </ul>
                 </div>
-                {error && <p className="text-red-500 text-sm">{error}</p>}
-                <ul className="space-y-2 max-h-60 overflow-y-auto">
-                    {categories.map(cat => (
-                        <li key={cat.id} className="flex justify-between items-center bg-gray-50 p-2 rounded">
-                            <span className="text-gray-800">{cat.nom}</span>
-                            <button onClick={() => handleDelete(cat.id)} className="p-1 text-red-500 hover:bg-red-100 rounded-full"><Trash2 size={16}/></button>
-                        </li>
-                    ))}
-                </ul>
-                 <div className="pt-4 flex">
-                    <button type="button" onClick={onClose} className="w-full ui-btn-secondary py-3">Fermer</button>
+                <div className="border-t pt-4">
+                    <h4 className="font-medium mb-2">Ajouter une catégorie</h4>
+                    <div className="flex gap-2">
+                        <input
+                            type="text"
+                            placeholder="Nom de la nouvelle catégorie"
+                            value={newCategoryName}
+                            onChange={e => setNewCategoryName(e.target.value)}
+                            className="ui-input flex-grow"
+                        />
+                        <button onClick={handleAddCategory} className="ui-btn-primary" disabled={isSubmitting}>
+                            {isSubmitting ? 'Ajout...' : 'Ajouter'}
+                        </button>
+                    </div>
+                </div>
+                <div className="flex justify-end pt-4">
+                    <button type="button" onClick={onClose} className="ui-btn-secondary">Fermer</button>
                 </div>
             </div>
         </Modal>
     );
-};
+});
 
-const DeleteProductModal: React.FC<{ isOpen: boolean; onClose: () => void; onSuccess: () => void; product: Product }> = ({ isOpen, onClose, onSuccess, product }) => {
+const DeleteProductModal: React.FC<{ isOpen: boolean; onClose: () => void; onSuccess: () => void; product: Product; }> = ({ isOpen, onClose, onSuccess, product }) => {
     const [isSubmitting, setSubmitting] = useState(false);
 
     const handleDelete = async () => {
         setSubmitting(true);
         try {
-            await api.deleteProduct(product.id);
+            await api.deleteEntity('products', product.id);
             onSuccess();
             onClose();
         } catch (error) {
-            console.error("Failed to delete product", error);
+            console.error('Failed to delete product', error);
+            alert('Error deleting product');
         } finally {
             setSubmitting(false);
         }
     };
 
     return (
-        <Modal isOpen={isOpen} onClose={onClose} title="Confirmer la Suppression">
-            <p className="text-gray-700">Êtes-vous sûr de vouloir supprimer le produit <strong className="text-gray-900">{product.nom_produit}</strong> ? Cette action est irréversible.</p>
-            <div className="flex flex-col sm:flex-row justify-end gap-3 pt-6">
-                <button type="button" onClick={onClose} className="w-full sm:w-auto ui-btn-secondary py-3">Annuler</button>
-                <button onClick={handleDelete} disabled={isSubmitting} className="w-full sm:w-auto ui-btn-danger py-3">{isSubmitting ? 'Suppression...' : 'Supprimer'}</button>
+        <Modal isOpen={isOpen} onClose={onClose} title="Supprimer le Produit">
+            <p>Êtes-vous sûr de vouloir supprimer le produit <strong>{product.nom_produit}</strong> ? Cette action est irréversible.</p>
+            <div className="flex justify-end gap-2 pt-4 mt-4">
+                <button type="button" onClick={onClose} className="ui-btn-secondary">Annuler</button>
+                <button onClick={handleDelete} className="ui-btn-danger" disabled={isSubmitting}>
+                    {isSubmitting ? 'Suppression...' : 'Supprimer'}
+                </button>
             </div>
         </Modal>
     );
-}
-
-// Simple helper components to avoid repetition
-const HelpCircle: React.FC<{ size: number }> = ({ size }) => (
-    <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"></circle><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"></path><line x1="12" y1="17" x2="12.01" y2="17"></line></svg>
-);
-
+});
 
 export default Produits;

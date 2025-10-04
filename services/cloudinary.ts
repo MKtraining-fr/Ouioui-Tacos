@@ -137,15 +137,28 @@ const defaultProductImage = getEnv('VITE_CLOUDINARY_DEFAULT_PRODUCT_IMAGE') ?? '
 
 export const DEFAULT_PRODUCT_IMAGE = defaultProductImage;
 
-export const resolveProductImageUrl = (image?: string | null): string => {
+export const resolveProductImageUrl = (image?: string | null, width?: number, height?: number): string => {
   const normalized = normalizeCloudinaryImageUrl(image);
   if (normalized) {
-    return normalized;
+    // Add Cloudinary transformations for format, quality, and dimensions
+    const transformations = ["f_auto", "q_auto"];
+    if (width) {
+      transformations.push(`w_${width}`);
+    }
+    if (height) {
+      transformations.push(`h_${height}`);
+    }
+    // Insert transformations before the public ID in the URL path
+    const parts = normalized.split("/upload/");
+    if (parts.length === 2) {
+      return `${parts[0]}/upload/${transformations.join(",")}/${parts[1]}`;
+    }
+    return normalized; // Fallback if URL format is unexpected
   }
   if (DEFAULT_PRODUCT_IMAGE) {
     return DEFAULT_PRODUCT_IMAGE;
   }
-  return '';
+  return "";
 };
 
 export const uploadProductImage = async (
