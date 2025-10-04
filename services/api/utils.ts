@@ -90,3 +90,10 @@ export const reorderOrderItems = (referenceItems: OrderItem[], itemsToReorder: O
   return [...ordered, ...remaining];
 };
 
+
+
+export const getBusinessDayStart = (date: Date): Date => {
+  const start = new Date(date);
+  start.setHours(6, 0, 0, 0); // Start of business day at 6 AM
+  return start;
+};

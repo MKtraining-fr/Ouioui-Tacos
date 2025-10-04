@@ -12,14 +12,14 @@ import useSiteContent from '../hooks/useSiteContent';
 import useCustomFonts from '../hooks/useCustomFonts';
 import {
   createBackgroundStyle,
-  createBodyTextStyle,
+  getElementBodyTextStyle,
   createElementBackgroundStyle,
   createElementBodyTextStyle,
   createElementTextStyle,
   createHeroBackgroundStyle,
-  createTextStyle,
+  getElementTextStyle,
 } from '../utils/siteStyleHelpers';
-import { resolveZoneFromElement } from '../components/SitePreviewCanvas';
+import { resolveZoneFromElement } from '../utils/siteCustomization';
 import { getHomeRedirectPath } from '../utils/navigation';
 
 const DEFAULT_BRAND_LOGO = '/logo-brand.svg';
@@ -289,21 +289,21 @@ const Login: React.FC = () => {
   const brandLogo = navigation.brandLogo ?? DEFAULT_BRAND_LOGO;
   const staffTriggerLogo = navigation.brandLogo ?? DEFAULT_BRAND_LOGO;
   const navigationBackgroundStyle = createBackgroundStyle(navigation.style);
-  const navigationTextStyle = createTextStyle(navigation.style);
+  const navigationTextStyle = getElementTextStyle(navigation.style);
   const heroBackgroundStyle = createHeroBackgroundStyle(hero.style, hero.backgroundImage);
   const heroTextStyle = createTextStyle(hero.style);
-  const heroBodyTextStyle = createBodyTextStyle(hero.style);
+  const heroBodyTextStyle = getElementBodyTextStyle(hero.style);
   const aboutBackgroundStyle = createBackgroundStyle(about.style);
-  const aboutTextStyle = createTextStyle(about.style);
+  const aboutTextStyle = getElementTextStyle(about.style);
   const menuBackgroundStyle = createBackgroundStyle(menuContent.style);
-  const menuTextStyle = createTextStyle(menuContent.style);
-  const menuBodyTextStyle = createBodyTextStyle(menuContent.style);
+  const menuTextStyle = getElementTextStyle(menuContent.style);
+  const menuBodyTextStyle = getElementBodyTextStyle(menuContent.style);
   const instagramReviewsBackgroundStyle = createBackgroundStyle(instagramReviewContent.style);
   const instagramReviewsTextStyle = createTextStyle(instagramReviewContent.style);
   const findUsBackgroundStyle = createBackgroundStyle(findUs.style);
-  const findUsTextStyle = createTextStyle(findUs.style);
+  const findUsTextStyle = getElementTextStyle(findUs.style);
   const footerBackgroundStyle = createBackgroundStyle(footer.style);
-  const footerTextStyle = createBodyTextStyle(footer.style);
+  const footerTextStyle = getElementBodyTextStyle(footer.style);
 
   const elementStyles = safeContent.elementStyles ?? {};
   const zoneStyleMap: Record<EditableZoneKey, typeof navigation.style> = {

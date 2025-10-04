@@ -22,7 +22,7 @@ import {
   SectionStyle,
   SiteContent,
   STYLE_EDITABLE_ELEMENT_KEYS,
-} from '../types';
+} from '../types/types';
 import { api } from '../services/api';
 import { normalizeCloudinaryImageUrl, uploadCustomizationAsset } from '../services/cloudinary';
 import {

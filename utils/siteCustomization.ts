@@ -173,3 +173,24 @@ export const createAssetFromFile = (file: File, url: string): CustomizationAsset
 
 
 
+
+
+export const resolveZoneFromElement = (element: EditableElementKey): EditableZoneKey => {
+  return element.split('.')[0] as EditableZoneKey;
+};
+
+
+export const cloneAnchorRect = (rect: DOMRect): DOMRect => {
+  return {
+    x: rect.x,
+    y: rect.y,
+    width: rect.width,
+    height: rect.height,
+    top: rect.top,
+    right: rect.right,
+    bottom: rect.bottom,
+    left: rect.left,
+    toJSON: () => ({ ...rect.toJSON() }),
+  };
+};
+

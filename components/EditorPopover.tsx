@@ -259,3 +259,20 @@ const EditorPopover: React.FC<EditorPopoverProps> = ({
 
 export default EditorPopover;
 
+
+
+export const EditableElement = ({ id, label, onEdit, as: Component = 'div', children, ...props }) => {
+  return (
+    <Component
+      data-element-id={id}
+      onClick={(e) => {
+        e.stopPropagation();
+        onEdit(id, 'text');
+      }}
+      {...props}
+    >
+      {children}
+    </Component>
+  );
+};
+

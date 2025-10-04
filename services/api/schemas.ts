@@ -1,6 +1,6 @@
-
 import { z } from "zod";
-import { DashboardPeriod, EditableElementKey, EditableZoneKey } from "../../types";
+import * as types from "../../types/types";
+import { CUSTOMIZATION_ASSET_TYPES } from "../../types/types";
 
 // Basic types
 const UuidSchema = z.string().uuid();
@@ -325,8 +325,8 @@ export const SiteContentSchema = z.object({
     socialLinks: z.record(NullableStringSchema).optional(),
     style: SectionBackgroundSchema,
   }),
-  elementStyles: z.record(z.nativeEnum(EditableElementKey), ElementStyleSchema).optional(),
-  elementRichText: z.record(z.nativeEnum(EditableElementKey), RichTextValueSchema).optional(),
+  elementStyles: z.record(z.enum(EDITABLE_ELEMENT_KEYS), ElementStyleSchema).optional(),
+  elementRichText: z.record(z.enum(EDITABLE_ELEMENT_KEYS), RichTextValueSchema).optional(),
   assets: z.object({
     library: z.array(z.object({
       id: UuidSchema,
@@ -334,7 +334,7 @@ export const SiteContentSchema = z.object({
       url: z.string().url(),
       format: z.string(),
       bytes: z.number().int().min(0),
-      type: z.nativeEnum(CustomizationAssetType),
+      type: z.enum(types.CUSTOMIZATION_ASSET_TYPES),
       createdAt: TimestampSchema,
     })).optional(),
   }).optional(),

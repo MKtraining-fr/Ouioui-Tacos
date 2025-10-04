@@ -59,7 +59,8 @@ import {
   mapSaleRow,
   mergeHomePageIntoPermissions,
 } from "./mappers";
-import { toTimestamp, isUuid, toNumber } from "./utils";
+import { toTimestamp, isUuid, toNumber, getBusinessDayStart } from "./utils";
+export { getBusinessDayStart };
 import {
   SupabaseRoleRowSchema,
   RoleSchema,
@@ -137,6 +138,7 @@ const ensureOrdersRealtimeSubscription = () => {
 
 
 export const api = {
+  getBusinessDayStart,
   onOrdersUpdate: (callback: EventCallback) => {
     ensureOrdersRealtimeSubscription();
     eventListeners.orders_updated = [...(eventListeners.orders_updated || []), callback];

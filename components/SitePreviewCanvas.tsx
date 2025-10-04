@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { SiteContent, Zone } from '../types';
 import { getElementTextStyle, getElementBodyTextStyle, getZoneStyle } from '../utils/siteStyleHelpers';
-import { useCustomFonts } from '../hooks/useCustomFonts';
+import useCustomFonts from '../hooks/useCustomFonts';
 import { EditableElement } from './EditorPopover';
 import { resolveZoneFromElement } from '../utils/siteCustomization';
 

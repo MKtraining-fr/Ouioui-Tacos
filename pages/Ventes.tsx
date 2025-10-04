@@ -1,225 +1,118 @@
-import React, { useEffect, useState, useCallback, useRef } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
-import {
-  Armchair,
-  DollarSign,
-  Utensils,
-  HandPlatter,
-  MoreVertical,
-  Pencil,
-  Trash2,
-  Plus,
-} from 'lucide-react';
-import { api } from '../services/api';
-import { Table } from '../types';
-import OrderTimer from '../components/OrderTimer';
-import TableModal, { TableFormValues } from '../components/TableModal';
 import { useAuth } from '../contexts/AuthContext';
+import { api } from '../services/api';
+import { Table, Order, OrderItem, Product } from '../types';
+import { notificationService } from '../services/notificationService';
+import TableModal from '../components/TableModal';
+import OrderModal from '../components/commande/OrderModal';
+import { PlusIcon, EyeIcon, PencilIcon, TrashIcon, ArrowPathIcon, CheckIcon, XMarkIcon } from '@heroicons/react/24/outline';
+import { Menu, Transition } from '@headlessui/react';
+import { Fragment } from 'react';
 
-type StatusDescriptor = { text: string; statusClass: string; Icon: React.ComponentType<{ size?: number }> };
-
-const STATUS_DESCRIPTORS: Record<Table['statut'], StatusDescriptor> = {
-  libre: { text: 'Libre', statusClass: 'status--free', Icon: Armchair },
-  en_cuisine: { text: 'En cuisine', statusClass: 'status--preparing', Icon: Utensils },
-  para_entregar: { text: 'Para entregar', statusClass: 'status--ready', Icon: HandPlatter },
-  para_pagar: { text: 'Para pagar', statusClass: 'status--payment', Icon: DollarSign },
-};
-
-const formatTableName = (name: string): string => {
-  const trimmed = name.trim();
-  if (!trimmed) {
-    return name;
-  }
-
-  const parts = trimmed.split(/\s+/);
-  if (parts.length < 2) {
-    return trimmed;
-  }
-
-  const [firstWord, ...rest] = parts;
-  let index = 0;
-
-  while (index < rest.length && rest[index].toLowerCase() === firstWord.toLowerCase()) {
-    index += 1;
-  }
-
-  return [firstWord, ...rest.slice(index)].join(' ');
-};
-
-const getTableStatus = (table: Table): StatusDescriptor => {
-  switch (table.statut) {
-    case 'libre':
-      return STATUS_DESCRIPTORS.libre;
-    case 'en_cuisine':
-      return STATUS_DESCRIPTORS.en_cuisine;
-    case 'para_entregar':
-      return STATUS_DESCRIPTORS.para_entregar;
-    case 'para_pagar':
-      return STATUS_DESCRIPTORS.para_pagar;
-    default:
-      if (table.estado_cocina === 'servido' || table.estado_cocina === 'entregada') {
-        return STATUS_DESCRIPTORS.para_pagar;
-      }
-
-      if (table.estado_cocina === 'listo') {
-        return STATUS_DESCRIPTORS.para_entregar;
-      }
-
-      if (table.commandeId) {
-        return STATUS_DESCRIPTORS.en_cuisine;
-      }
-
-      return STATUS_DESCRIPTORS.libre;
-  }
-};
-
-const TableCard = React.memo<{
+interface TableCardProps {
   table: Table;
-  onServe: (orderId: string) => void;
-  canEdit: boolean;
-  onEdit?: (table: Table) => void;
-  onDelete?: (table: Table) => Promise<void> | void;
-  isDeleting?: boolean;
-}>(({ table, onServe, canEdit, onEdit, onDelete, isDeleting }) => {
-  const navigate = useNavigate();
-  const { text, statusClass, Icon } = getTableStatus(table);
-  const [isMenuOpen, setIsMenuOpen] = useState(false);
-  const menuRef = useRef<HTMLDivElement | null>(null);
+  openOrderModal: (table: Table) => void;
+  openEditTableModal: (table: Table) => void;
+  handleDeleteTable: (id: string) => void;
+  canManageTables: boolean;
+  canManageOrders: boolean;
+}
 
-  const handleCardClick = () => {
-    navigate(`/commande/${table.id}`);
-  };
-
-  const handleCardKeyDown = (event: React.KeyboardEvent<HTMLDivElement>) => {
-    if (event.key === 'Enter' || event.key === ' ') {
-      event.preventDefault();
-      handleCardClick();
+const TableCard = React.memo(({ table, openOrderModal, openEditTableModal, handleDeleteTable, canManageTables, canManageOrders }: TableCardProps) => {
+  const tableStatusClass = useMemo(() => {
+    switch (table.status) {
+      case 'occupied':
+        return 'bg-red-100 text-red-800';
+      case 'waiting':
+        return 'bg-yellow-100 text-yellow-800';
+      case 'available':
+        return 'bg-green-100 text-green-800';
+      default:
+        return 'bg-gray-100 text-gray-800';
     }
-  };
-
-  const handleServeClick = (event: React.MouseEvent<HTMLButtonElement>) => {
-    event.stopPropagation();
-    if (table.commandeId) {
-      onServe(table.commandeId);
-    }
-  };
-
-  const handleMenuToggle = (event: React.MouseEvent<HTMLButtonElement>) => {
-    event.stopPropagation();
-    setIsMenuOpen(prev => !prev);
-  };
-
-  useEffect(() => {
-    if (!isMenuOpen) {
-      return;
-    }
-
-    const handleClickOutside = (event: MouseEvent) => {
-      if (menuRef.current && !menuRef.current.contains(event.target as Node)) {
-        setIsMenuOpen(false);
-      }
-    };
-
-    document.addEventListener('mousedown', handleClickOutside);
-    return () => {
-      document.removeEventListener('mousedown', handleClickOutside);
-    };
-  }, [isMenuOpen]);
-
-  const handleEditClick = (event: React.MouseEvent<HTMLButtonElement>) => {
-    event.stopPropagation();
-    setIsMenuOpen(false);
-    onEdit?.(table);
-  };
-
-  const handleDeleteClick = async (event: React.MouseEvent<HTMLButtonElement>) => {
-    event.stopPropagation();
-    setIsMenuOpen(false);
-    if (!onDelete) {
-      return;
-    }
-
-    try {
-      await onDelete(table);
-    } catch (error) {
-      console.error('Failed to delete table from card:', error);
-    }
-  };
-
-  const displayName = formatTableName(table.nom);
+  }, [table.status]);
 
   return (
     <div
-      onClick={handleCardClick}
-      onKeyDown={handleCardKeyDown}
-      className={`ui-card status-card ${statusClass} relative`}
-      role="button"
+      className="bg-white rounded-lg shadow-md p-6 flex flex-col justify-between transform transition duration-300 hover:scale-105"
+      aria-label={`Table ${table.number}, statut: ${table.status}`}
       tabIndex={0}
     >
-      {canEdit && (
-        <div className="absolute right-3 top-3" ref={menuRef}>
+      <div>
+        <h3 className="text-2xl font-bold text-gray-800 mb-2">Table {table.number}</h3>
+        <p className={`inline-flex items-center px-3 py-0.5 rounded-full text-sm font-medium ${tableStatusClass}`}>
+          {table.status === 'occupied' && 'Occupée'}
+          {table.status === 'waiting' && 'En attente'}
+          {table.status === 'available' && 'Disponible'}
+          {table.status === 'cleaning' && 'Nettoyage'}
+        </p>
+        {table.current_order_id && (
+          <p className="text-sm text-gray-600 mt-2">Commande actuelle: {table.current_order_id}</p>
+        )}
+        {table.couverts && (
+          <p className="text-sm text-gray-600">Couverts: {table.couverts}</p>
+        )}
+      </div>
+      <div className="mt-4 flex justify-end space-x-2">
+        {canManageOrders && (
           <button
-            type="button"
-            onClick={handleMenuToggle}
-            className="flex h-9 w-9 items-center justify-center rounded-full text-gray-500 transition hover:bg-gray-100 hover:text-gray-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary-500 disabled:cursor-not-allowed disabled:opacity-60"
-            aria-haspopup="true"
-            aria-expanded={isMenuOpen}
-            aria-label="Options de la table"
-            disabled={isDeleting}
+            onClick={() => openOrderModal(table)}
+            className="p-2 rounded-full bg-brand-primary text-white hover:bg-brand-dark focus:outline-none focus:ring-2 focus:ring-brand-primary focus:ring-opacity-50"
+            aria-label={`Voir ou gérer la commande de la table ${table.number}`}
           >
-            <MoreVertical size={18} />
+            <EyeIcon className="h-5 w-5" />
           </button>
-          {isMenuOpen && (
-            <div className="absolute right-0 mt-2 w-44 rounded-md border border-gray-200 bg-white py-1 text-sm shadow-lg">
-              <button
-                type="button"
-                onClick={handleEditClick}
-                className="flex w-full items-center gap-2 px-3 py-2 text-left text-gray-700 transition hover:bg-gray-100"
-                aria-label="Modifier la table"
+        )}
+        {canManageTables && (
+          <Menu as="div" className="relative inline-block text-left">
+            <div>
+              <Menu.Button
+                className="inline-flex justify-center w-full rounded-full p-2 bg-gray-100 text-gray-600 hover:bg-gray-200 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-gray-100 focus:ring-brand-primary"
+                aria-label={`Options pour la table ${table.number}`}
               >
-                <Pencil size={16} />
-                Modifier
-              </button>
-              <button
-                type="button"
-                onClick={handleDeleteClick}
-                className="flex w-full items-center gap-2 px-3 py-2 text-left text-red-600 transition hover:bg-red-50 disabled:cursor-not-allowed disabled:opacity-60"
-                disabled={isDeleting}
-                aria-label={isDeleting ? 'Suppression de la table en cours…' : 'Supprimer la table'}
-              >
-                <Trash2 size={16} />
-                {isDeleting ? 'Suppression…' : 'Supprimer'}
-              </button>
+                <PencilIcon className="h-5 w-5" />
+              </Menu.Button>
             </div>
-          )}
-        </div>
-      )}
-
-      <div className="status-card__header">
-        <h3 className="status-card__title">{displayName}</h3>
-        {table.date_envoi_cuisine && table.statut !== 'libre' && (
-          <div className="status-card__timer">
-            <OrderTimer startTime={table.date_envoi_cuisine} className="w-full justify-center" />
-          </div>
-        )}
-      </div>
-
-      <div className="status-card__body">
-        <Icon size={56} className="status-card__icon" />
-        <p className="status-card__state">{text}</p>
-      </div>
-
-      <div className="status-card__footer">
-        {table.statut !== 'libre' ? (
-          <p className="status-card__meta">Couverts : {table.couverts}</p>
-        ) : (
-          <p className="status-card__meta">Capacité : {table.capacite}</p>
-        )}
-
-        {(table.estado_cocina === 'listo' || table.statut === 'para_entregar') && (
-          <button type="button" onClick={handleServeClick} className="ui-btn ui-btn-accent status-card__cta">
-            ENTREGADA
-          </button>
+            <Transition
+              as={Fragment}
+              enter="transition ease-out duration-100"
+              enterFrom="transform opacity-0 scale-95"
+              enterTo="transform opacity-100 scale-100"
+              leave="transition ease-in duration-75"
+              leaveFrom="transform opacity-100 scale-100"
+              leaveTo="transform opacity-0 scale-95"
+            >
+              <Menu.Items className="origin-top-right absolute right-0 mt-2 w-56 rounded-md shadow-lg bg-white ring-1 ring-black ring-opacity-5 focus:outline-none z-10">
+                <div className="py-1">
+                  <Menu.Item>
+                    {({ active }) => (
+                      <button
+                        onClick={() => openEditTableModal(table)}
+                        className={`${active ? 'bg-gray-100 text-gray-900' : 'text-gray-700'} flex px-4 py-2 text-sm w-full text-left`}
+                        aria-label={`Modifier les détails de la table ${table.number}`}
+                      >
+                        <PencilIcon className="mr-3 h-5 w-5 text-gray-400" aria-hidden="true" />
+                        Modifier la table
+                      </button>
+                    )}
+                  </Menu.Item>
+                  <Menu.Item>
+                    {({ active }) => (
+                      <button
+                        onClick={() => handleDeleteTable(table.id)}
+                        className={`${active ? 'bg-gray-100 text-gray-900' : 'text-gray-700'} flex px-4 py-2 text-sm w-full text-left`}
+                        aria-label={`Supprimer la table ${table.number}`}
+                      >
+                        <TrashIcon className="mr-3 h-5 w-5 text-gray-400" aria-hidden="true" />
+                        Supprimer la table
+                      </button>
+                    )}
+                  </Menu.Item>
+                </div>
+              </Menu.Items>
+            </Transition>
+          </Menu>
         )}
       </div>
     </div>
@@ -228,244 +121,336 @@ const TableCard = React.memo<{
 
 const Ventes: React.FC = () => {
   const { role } = useAuth();
-  const canEditTables = role?.permissions?.['/ventes'] === 'editor';
+  const navigate = useNavigate();
 
   const [tables, setTables] = useState<Table[]>([]);
   const [loading, setLoading] = useState(true);
-  const [fetchError, setFetchError] = useState<string | null>(null);
-  const [actionError, setActionError] = useState<string | null>(null);
-  const [actionSuccess, setActionSuccess] = useState<string | null>(null);
-  const [isModalOpen, setIsModalOpen] = useState(false);
-  const [modalMode, setModalMode] = useState<'create' | 'edit'>('create');
-  const [selectedTable, setSelectedTable] = useState<Table | null>(null);
-  const [deletingTableId, setDeletingTableId] = useState<string | null>(null);
-  const [page, setPage] = useState(0);
-  const [hasMore, setHasMore] = useState(true);
-  const limit = 20; // Nombre de tables à charger par page
+  const [error, setError] = useState<string | null>(null);
+  const [isTableModalOpen, setIsTableModalOpen] = useState(false);
+  const [isOrderModalOpen, setIsOrderModalOpen] = useState(false);
+  const [currentTable, setCurrentTable] = useState<Table | null>(null);
+  const [currentOrder, setCurrentOrder] = useState<Order | null>(null);
+  const [modalMode, setModalMode] = useState<'add' | 'edit'>('add');
+  const [modalInitialValues, setModalInitialValues] = useState<Partial<Table>>({});
+  const [showCouvertsField, setShowCouvertsField] = useState(false);
 
-  const fetchIdRef = useRef(0);
+  const [currentPage, setCurrentPage] = useState(0);
+  const [totalPages, setTotalPages] = useState(0);
+  const tablesPerPage = 12; // Nombre de tables par page
 
-  const fetchTables = useCallback(async (reset = false) => {
-    const fetchId = ++fetchIdRef.current;
-    if (reset) {
-      setLoading(true);
-      setPage(0);
-      setTables([]);
-      setHasMore(true);
-    }
+  const canManageTables = role?.permissions?.['/ventes']?.write;
+  const canManageOrders = role?.permissions?.['/ventes']?.write; // Assuming same permission for now
 
-    if (!hasMore && !reset) {
-      setLoading(false);
-      return;
-    }
-
+  const fetchTables = useCallback(async (page: number) => {
+    setLoading(true);
     try {
-      const data = await api.getTables(reset ? 0 : page, limit);
-      if (fetchId === fetchIdRef.current) {
-        setTables(prevTables => (reset ? data : [...prevTables, ...data]));
-        setHasMore(data.length === limit);
-        setFetchError(null);
-      }
-    } catch (error) {
-      console.error('Failed to fetch tables', error);
-      if (fetchId === fetchIdRef.current) {
-        setFetchError('Impossible de charger le plan de salle. Veuillez réessayer.');
-      }
+      const { data, count } = await api.getTables(page * tablesPerPage, tablesPerPage);
+      setTables(data || []);
+      setTotalPages(Math.ceil((count || 0) / tablesPerPage));
+    } catch (err) {
+      notificationService.showError("Erreur lors du chargement des tables.");
+      setError("Impossible de charger les tables.");
     } finally {
-      if (fetchId === fetchIdRef.current) {
+      setLoading(false);
+    }
+  }, [tablesPerPage]);
+
+  useEffect(() => {
+    fetchTables(currentPage);
+  }, [fetchTables, currentPage]);
+
+  const handleModalSubmit = useCallback(async (tableData: Partial<Table>) => {
+    setLoading(true);
+    try {
+      if (modalMode === 'add') {
+        await api.createTable(tableData);
+        notificationService.showSuccess("Table ajoutée avec succès !");
+      } else if (currentTable) {
+        await api.updateTable(currentTable.id, tableData);
+        notificationService.showSuccess("Table mise à jour avec succès !");
+      }
+      setIsTableModalOpen(false);
+      fetchTables(currentPage);
+    } catch (err) {
+      notificationService.showError("Erreur lors de l'enregistrement de la table.");
+    } finally {
+      setLoading(false);
+    }
+  }, [modalMode, currentTable, fetchTables, currentPage]);
+
+  const handleDeleteTable = useCallback(async (id: string) => {
+    if (window.confirm("Êtes-vous sûr de vouloir supprimer cette table ?")) {
+      setLoading(true);
+      try {
+        await api.deleteTable(id);
+        notificationService.showSuccess("Table supprimée avec succès !");
+        fetchTables(currentPage);
+      } catch (err) {
+        notificationService.showError("Erreur lors de la suppression de la table.");
+      } finally {
         setLoading(false);
       }
     }
-  }, [page, hasMore]);
+  }, [fetchTables, currentPage]);
 
-  useEffect(() => {
-    fetchTables(true);
-    const interval = setInterval(() => fetchTables(true), 10000); // Rafraîchir toutes les 10 secondes
-    const unsubscribe = api.notifications.subscribe('orders_updated', () => fetchTables(true));
-    return () => {
-      clearInterval(interval);
-      unsubscribe();
-    };
-  }, [fetchTables]);
-
-  const handleLoadMore = useCallback(() => {
-    setPage(prevPage => prevPage + 1);
+  const openAddTableModal = useCallback(() => {
+    setModalMode('add');
+    setModalInitialValues({});
+    setShowCouvertsField(false);
+    setIsTableModalOpen(true);
   }, []);
 
-  const handleModalClose = useCallback(() => {
-    setIsModalOpen(false);
-    setSelectedTable(null);
-  }, []);
-
-  const openCreateModal = useCallback(() => {
-    setModalMode('create');
-    setSelectedTable(null);
-    setActionError(null);
-    setActionSuccess(null);
-    setIsModalOpen(true);
-  }, []);
-
-  const handleEditTable = useCallback((table: Table) => {
+  const openEditTableModal = useCallback((table: Table) => {
     setModalMode('edit');
-    setSelectedTable(table);
-    setActionError(null);
-    setActionSuccess(null);
-    setIsModalOpen(true);
+    setCurrentTable(table);
+    setModalInitialValues(table);
+    setShowCouvertsField(true);
+    setIsTableModalOpen(true);
   }, []);
 
-  const handleModalSubmit = useCallback(
-    async (values: TableFormValues) => {
-      setActionError(null);
-      setActionSuccess(null);
-
+  const openOrderModal = useCallback(async (table: Table) => {
+    setCurrentTable(table);
+    if (table.current_order_id) {
       try {
-        let successMessage = '';
-        if (modalMode === 'create') {
-          await api.createTable(values);
-          successMessage = 'Table créée avec succès.';
-        } else {
-          if (!selectedTable) {
-            const message = 'Aucune table sélectionnée pour la mise à jour.';
-            setActionError(message);
-            throw new Error(message);
-          }
-          await api.updateTable(selectedTable.id, values);
-          successMessage = 'Table mise à jour avec succès.';
+        const order = await api.getOrderById(table.current_order_id);
+        setCurrentOrder(order);
+      } catch (err) {
+        notificationService.showError("Erreur lors du chargement de la commande.");
+        setCurrentOrder(null);
+      }
+    } else {
+      setCurrentOrder(null);
+    }
+    setIsOrderModalOpen(true);
+  }, []);
+
+  const closeOrderModal = useCallback(() => {
+    setIsOrderModalOpen(false);
+    setCurrentTable(null);
+    setCurrentOrder(null);
+    fetchTables(currentPage); // Refresh tables after order modal closes
+  }, [fetchTables, currentPage]);
+
+  const handleCreateOrder = useCallback(async (tableId: string, couverts: number) => {
+    try {
+      const newOrder = await api.createOrder(tableId, couverts);
+      notificationService.showSuccess("Commande créée avec succès !");
+      setCurrentOrder(newOrder);
+      fetchTables(currentPage);
+    } catch (err) {
+      notificationService.showError("Erreur lors de la création de la commande.");
+    }
+  }, [fetchTables, currentPage]);
+
+  const handleUpdateOrder = useCallback(async (orderId: string, updates: Partial<Order>) => {
+    try {
+      const updatedOrder = await api.updateOrder(orderId, updates);
+      notificationService.showSuccess("Commande mise à jour avec succès !");
+      setCurrentOrder(updatedOrder);
+      fetchTables(currentPage);
+    } catch (err) {
+      notificationService.showError("Erreur lors de la mise à jour de la commande.");
+    }
+  }, [fetchTables, currentPage]);
+
+  const handleAddOrderItem = useCallback(async (orderId: string, productId: string, quantity: number, price: number) => {
+    try {
+      await api.createOrderItem(orderId, productId, quantity, price);
+      notificationService.showSuccess("Article ajouté à la commande !");
+      const updatedOrder = await api.getOrderById(orderId);
+      setCurrentOrder(updatedOrder);
+    } catch (err) {
+      notificationService.showError("Erreur lors de l'ajout de l'article à la commande.");
+    }
+  }, []);
+
+  const handleUpdateOrderItem = useCallback(async (orderItemId: string, updates: Partial<OrderItem>) => {
+    try {
+      await api.updateOrderItem(orderItemId, updates);
+      notificationService.showSuccess("Article de commande mis à jour !");
+      if (currentOrder) {
+        const updatedOrder = await api.getOrderById(currentOrder.id);
+        setCurrentOrder(updatedOrder);
+      }
+    } catch (err) {
+      notificationService.showError("Erreur lors de la mise à jour de l'article de commande.");
+    }
+  }, [currentOrder]);
+
+  const handleDeleteOrderItem = useCallback(async (orderItemId: string) => {
+    if (window.confirm("Êtes-vous sûr de vouloir supprimer cet article de la commande ?")) {
+      try {
+        await api.deleteOrderItem(orderItemId);
+        notificationService.showSuccess("Article de commande supprimé !");
+        if (currentOrder) {
+          const updatedOrder = await api.getOrderById(currentOrder.id);
+          setCurrentOrder(updatedOrder);
         }
-
-        await fetchTables(true); // Recharger toutes les tables après modification/création
-        handleModalClose();
-        setActionSuccess(successMessage);
-      } catch (error) {
-        console.error('Failed to save table:', error);
-        const message =
-          modalMode === 'create'
-            ? 'Impossible de créer la table. Veuillez réessayer.'
-            : 'Impossible de mettre à jour la table. Veuillez réessayer.';
-        setActionError(message);
-        throw new Error(message);
+      } catch (err) {
+        notificationService.showError("Erreur lors de la suppression de l'article de commande.");
       }
-    },
-    [fetchTables, handleModalClose, modalMode, selectedTable],
-  );
+    }
+  }, [currentOrder]);
 
-  const handleDeleteTable = useCallback(
-    async (table: Table) => {
-      if (!confirm('Supprimer cette table ? Cette action est irréversible.')) {
-        return;
+  const handleUpdateOrderItemStatus = useCallback(async (orderItemId: string, status: string) => {
+    try {
+      await api.updateOrderItemStatus(orderItemId, status);
+      notificationService.showSuccess("Statut de l'article mis à jour !");
+      if (currentOrder) {
+        const updatedOrder = await api.getOrderById(currentOrder.id);
+        setCurrentOrder(updatedOrder);
       }
+    } catch (err) {
+      notificationService.showError("Erreur lors de la mise à jour du statut de l'article.");
+    }
+  }, [currentOrder]);
 
-      setActionError(null);
-      setActionSuccess(null);
-      setDeletingTableId(table.id);
-
-      try {
-        await api.deleteTable(table.id);
-        await fetchTables(true); // Recharger toutes les tables après suppression
-        setActionSuccess('Table supprimée avec succès.');
-      } catch (error) {
-        console.error('Failed to delete table:', error);
-        setActionError('Impossible de supprimer la table. Veuillez réessayer.');
-      } finally {
-        setDeletingTableId(null);
+  const handleUpdateOrderKitchenStatus = useCallback(async (orderId: string, status: string) => {
+    try {
+      await api.updateOrderKitchenStatus(orderId, status);
+      notificationService.showSuccess("Statut de la cuisine mis à jour !");
+      if (currentOrder) {
+        const updatedOrder = await api.getOrderById(currentOrder.id);
+        setCurrentOrder(updatedOrder);
       }
-    },
-    [fetchTables],
-  );
+    } catch (err) {
+      notificationService.showError("Erreur lors de la mise à jour du statut de la cuisine.");
+    }
+  }, [currentOrder]);
 
-  const handleServeOrder = useCallback(
-    async (orderId: string) => {
-      setActionError(null);
-      setActionSuccess(null);
-      try {
-        await api.markOrderAsServed(orderId);
-        await fetchTables(true); // Recharger toutes les tables après avoir servi une commande
-      } catch (error) {
-        console.error('Failed to mark order as served:', error);
-        setActionError('Impossible de marquer la commande comme servie. Veuillez réessayer.');
+  const handleUpdateOrderStatus = useCallback(async (orderId: string, status: string) => {
+    try {
+      await api.updateOrderStatus(orderId, status);
+      notificationService.showSuccess("Statut de la commande mis à jour !");
+      if (currentOrder) {
+        const updatedOrder = await api.getOrderById(currentOrder.id);
+        setCurrentOrder(updatedOrder);
       }
-    },
-    [fetchTables],
-  );
+      fetchTables(currentPage);
+    } catch (err) {
+      notificationService.showError("Erreur lors de la mise à jour du statut de la commande.");
+    }
+  }, [currentOrder, fetchTables, currentPage]);
 
-  if (loading && tables.length === 0) {
-    return <p className="section-text section-text--muted">Chargement du plan de salle...</p>;
+  const handleUpdateOrderPaymentStatus = useCallback(async (orderId: string, status: string) => {
+    try {
+      await api.updateOrderPaymentStatus(orderId, status);
+      notificationService.showSuccess("Statut de paiement mis à jour !");
+      if (currentOrder) {
+        const updatedOrder = await api.getOrderById(currentOrder.id);
+        setCurrentOrder(updatedOrder);
+      }
+    } catch (err) {
+      notificationService.showError("Erreur lors de la mise à jour du statut de paiement.");
+    }
+  }, [currentOrder]);
+
+  const handleLinkOrderToTable = useCallback(async (orderId: string, tableId: string) => {
+    try {
+      await api.linkOrderToTable(orderId, tableId);
+      notificationService.showSuccess("Commande liée à la table avec succès !");
+      fetchTables(currentPage);
+    } catch (err) {
+      notificationService.showError("Erreur lors de la liaison de la commande à la table.");
+    }
+  }, [fetchTables, currentPage]);
+
+  const handleUnlinkOrderFromTable = useCallback(async (tableId: string) => {
+    try {
+      await api.unlinkOrderFromTable(tableId);
+      notificationService.showSuccess("Commande dissociée de la table avec succès !");
+      fetchTables(currentPage);
+    } catch (err) {
+      notificationService.showError("Erreur lors de la dissociation de la commande de la table.");
+    }
+  }, [fetchTables, currentPage]);
+
+  if (loading) {
+    return <div className="text-center py-8">Chargement des tables...</div>;
   }
 
-  const modalInitialValues =
-    modalMode === 'edit' && selectedTable
-      ? {
-          nom: selectedTable.nom,
-          capacite: selectedTable.capacite,
-          couverts: selectedTable.couverts,
-        }
-      : undefined;
-
-  const showCouvertsField = modalMode === 'edit' && Boolean(selectedTable?.commandeId);
+  if (error) {
+    return <div className="text-center py-8 text-red-500">{error}</div>;
+  }
 
   return (
-    <div>
-      <div className="flex flex-col gap-4">
-        {canEditTables && (
-          <div className="flex justify-end">
-            <button type="button" onClick={openCreateModal} className="ui-btn ui-btn-primary flex items-center gap-2">
-              <Plus size={18} />
-              Ajouter une table
-            </button>
-          </div>
-        )}
+    <div className="p-6 bg-gray-50 min-h-screen">
+      <h1 className="text-3xl font-bold text-gray-800 mb-6">Gestion des Ventes</h1>
 
-        {fetchError && (
-          <div className="rounded-md border border-amber-200 bg-amber-50 p-4 text-sm text-amber-700">{fetchError}</div>
-        )}
-
-        {actionError && (
-          <div className="rounded-md border border-red-200 bg-red-50 p-4 text-sm text-red-700">{actionError}</div>
-        )}
-
-        {actionSuccess && (
-          <div className="rounded-md border border-emerald-200 bg-emerald-50 p-4 text-sm text-emerald-700">{actionSuccess}</div>
+      <div className="flex justify-end mb-6">
+        {canManageTables && (
+          <button
+            onClick={openAddTableModal}
+            className="flex items-center px-4 py-2 bg-brand-primary text-white rounded-md shadow-sm hover:bg-brand-dark focus:outline-none focus:ring-2 focus:ring-brand-primary focus:ring-opacity-50"
+            aria-label="Ajouter une nouvelle table"
+          >
+            <PlusIcon className="h-5 w-5 mr-2" />
+            Ajouter Table
+          </button>
         )}
       </div>
 
-      <div className="mt-6 status-grid">
-        {tables.map(table => (
-          <TableCard
-            key={table.id}
-            table={table}
-            onServe={handleServeOrder}
-            canEdit={Boolean(canEditTables)}
-            onEdit={handleEditTable}
-            onDelete={handleDeleteTable}
-            isDeleting={deletingTableId === table.id}
-          />
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+        {tables.length > 0 ? (
+          tables.map(table => (
+            <TableCard
+              key={table.id}
+              table={table}
+              openOrderModal={openOrderModal}
+              openEditTableModal={openEditTableModal}
+              handleDeleteTable={handleDeleteTable}
+              canManageTables={canManageTables}
+              canManageOrders={canManageOrders}
+            />
+          ))
+        ) : (
+          <p className="col-span-full text-center text-gray-500">Aucune table trouvée.</p>
+        )}
+      </div>
+
+      <div className="flex justify-center mt-6">
+        {Array.from({ length: totalPages }, (_, i) => (
+          <button
+            key={i}
+            onClick={() => setCurrentPage(i)}
+            className={`mx-1 px-3 py-1 rounded-md ${currentPage === i ? 'bg-brand-primary text-white' : 'bg-gray-200 text-gray-700'}`}
+          >
+            {i + 1}
+          </button>
         ))}
       </div>
 
-      {hasMore && (
-        <div className="flex justify-center mt-6">
-          <button
-            type="button"
-            onClick={handleLoadMore}
-            className="ui-btn ui-btn-secondary"
-            disabled={loading}
-          >
-            {loading ? 'Chargement...' : 'Charger plus de tables'}
-          </button>
-        </div>
-      )}
-
       <TableModal
-        isOpen={isModalOpen}
-        onClose={handleModalClose}
-        mode={modalMode}
-        initialValues={modalInitialValues}
+        isOpen={isTableModalOpen}
+        onClose={() => setIsTableModalOpen(false)}
         onSubmit={handleModalSubmit}
+        initialValues={modalInitialValues}
+        mode={modalMode}
         showCouvertsField={showCouvertsField}
       />
+
+      {isOrderModalOpen && currentTable && (
+        <OrderModal
+          isOpen={isOrderModalOpen}
+          onClose={closeOrderModal}
+          table={currentTable}
+          order={currentOrder}
+          onCreateOrder={handleCreateOrder}
+          onUpdateOrder={handleUpdateOrder}
+          onAddOrderItem={handleAddOrderItem}
+          onUpdateOrderItem={handleUpdateOrderItem}
+          onDeleteOrderItem={handleDeleteOrderItem}
+          onUpdateOrderItemStatus={handleUpdateOrderItemStatus}
+          onUpdateOrderKitchenStatus={handleUpdateOrderKitchenStatus}
+          onUpdateOrderStatus={handleUpdateOrderStatus}
+          onUpdateOrderPaymentStatus={handleUpdateOrderPaymentStatus}
+          onLinkOrderToTable={handleLinkOrderToTable}
+          onUnlinkOrderFromTable={handleUnlinkOrderFromTable}
+        />
+      )}
     </div>
   );
-});
+};
 
 export default Ventes;
 

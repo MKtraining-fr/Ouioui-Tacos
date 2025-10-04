@@ -73,13 +73,13 @@ export const createHeroBackgroundStyle = (
   return base;
 };
 
-export const createTextStyle = (style: SectionStyle, globalStyle?: SiteContent["globalStyle"]): CSSProperties => ({
+export const getElementTextStyle = (style: SectionStyle, globalStyle?: SiteContent["globalStyle"]): CSSProperties => ({
   color: style.textColor ?? globalStyle?.primaryColor,
   fontFamily: formatFontFamily(style.fontFamily ?? globalStyle?.fontFamily),
 });
 
-export const createBodyTextStyle = (style: SectionStyle, globalStyle?: SiteContent["globalStyle"]): CSSProperties => ({
-  ...createTextStyle(style, globalStyle),
+export const getElementBodyTextStyle = (style: SectionStyle, globalStyle?: SiteContent["globalStyle"]): CSSProperties => ({
+  ...getElementTextStyle(style, globalStyle),
   fontSize: style.fontSize ?? globalStyle?.fontSize,
 });
 
@@ -116,3 +116,37 @@ export const createElementBackgroundStyle = (
   }
   return {};
 };
+
+
+export const getZoneStyle = (zone: Zone, assets: CustomizationAsset[]): CSSProperties => {
+  const style: CSSProperties = {};
+
+  // Logic to determine background style based on zone type and assets
+  // This is a placeholder, actual implementation will depend on how zones are structured
+  if (zone.type === 'hero' && zone.backgroundImage) {
+    style.backgroundImage = `url(${zone.backgroundImage})`;
+    style.backgroundSize = 'cover';
+    style.backgroundPosition = 'center';
+  } else if (zone.type === 'menu' && zone.image) {
+    style.backgroundImage = `url(${zone.image})`;
+    style.backgroundSize = 'cover';
+    style.backgroundPosition = 'center';
+  }
+
+  // Add other styles from the zone if available
+  if (zone.style?.backgroundColor) {
+    style.backgroundColor = zone.style.backgroundColor;
+  }
+  if (zone.style?.textColor) {
+    style.color = zone.style.textColor;
+  }
+  if (zone.style?.fontFamily) {
+    style.fontFamily = zone.style.fontFamily;
+  }
+  if (zone.style?.fontSize) {
+    style.fontSize = zone.style.fontSize;
+  }
+
+  return style;
+};
+

@@ -9,7 +9,7 @@ import {
   SiteAssets,
   SiteContent,
   EDITABLE_ELEMENT_KEYS,
-} from '../types';
+} from '../types/types';
 import { normalizeCloudinaryImageUrl } from '../services/cloudinary';
 import { sanitizeRichTextValue } from './richText';
 
@@ -485,70 +485,140 @@ export const resolveSiteContent = (content?: Partial<SiteContent> | null): SiteC
       text: resolveString(content?.footer?.text, base.footer.text),
       style: resolveSectionStyle(content?.footer?.style, base.footer.style),
     },
-    elementStyles: resolveElementStyles(content?.elementStyles ?? null, base.elementStyles),
-    elementRichText: resolveElementRichText(content?.elementRichText ?? null, base.elementRichText),
-    assets: resolveSiteAssets(content?.assets ?? null, DEFAULT_SITE_ASSETS),
+    elementStyles: resolveElementStyles(content?.elementStyles, base.elementStyles),
+    elementRichText: resolveElementRichText(content?.elementRichText, base.elementRichText),
+    assets: resolveSiteAssets(content?.assets, base.assets),
   };
 };
 
-export const sanitizeSiteContentInput = (content: SiteContent): SiteContent => ({
-  navigation: {
-    brand: trimOrEmpty(content.navigation.brand),
-    brandLogo: sanitizeImage(content.navigation.brandLogo) ?? null,
-    staffLogo: sanitizeImage(content.navigation.staffLogo) ?? null,
-    links: {
-      home: trimOrEmpty(content.navigation.links.home),
-      about: trimOrEmpty(content.navigation.links.about),
-      menu: trimOrEmpty(content.navigation.links.menu),
-      contact: trimOrEmpty(content.navigation.links.contact),
-      loginCta: trimOrEmpty(content.navigation.links.loginCta),
+export const sanitizeSiteContent = (content: SiteContent): SiteContent => {
+  const base = DEFAULT_SITE_CONTENT;
+  return {
+    navigation: {
+      brand: trimOrEmpty(content.navigation.brand),
+      brandLogo: sanitizeImage(content.navigation.brandLogo),
+      staffLogo: sanitizeImage(content.navigation.staffLogo),
+      links: {
+        home: trimOrEmpty(content.navigation.links.home),
+        about: trimOrEmpty(content.navigation.links.about),
+        menu: trimOrEmpty(content.navigation.links.menu),
+        contact: trimOrEmpty(content.navigation.links.contact),
+        loginCta: trimOrEmpty(content.navigation.links.loginCta),
+      },
+      style: sanitizeSectionStyle(content.navigation.style, base.navigation.style),
     },
-    style: sanitizeSectionStyle(content.navigation.style, DEFAULT_NAVIGATION_STYLE),
-  },
-  hero: {
-    title: trimOrEmpty(content.hero.title),
-    subtitle: trimOrEmpty(content.hero.subtitle),
-    ctaLabel: trimOrEmpty(content.hero.ctaLabel),
-    backgroundImage: sanitizeImage(content.hero.backgroundImage),
-    historyTitle: trimOrEmpty(content.hero.historyTitle),
-    reorderCtaLabel: trimOrEmpty(content.hero.reorderCtaLabel),
-    style: sanitizeSectionStyle(content.hero.style, DEFAULT_HERO_STYLE),
-  },
-  about: {
-    title: trimOrEmpty(content.about.title),
-    description: trimOrEmpty(content.about.description),
-    image: sanitizeImage(content.about.image),
-    style: sanitizeSectionStyle(content.about.style, DEFAULT_ABOUT_STYLE),
-  },
-  menu: {
-    title: trimOrEmpty(content.menu.title),
-    ctaLabel: trimOrEmpty(content.menu.ctaLabel),
-    loadingLabel: trimOrEmpty(content.menu.loadingLabel),
-    image: sanitizeImage(content.menu.image),
-    style: sanitizeSectionStyle(content.menu.style, DEFAULT_MENU_STYLE),
-  },
-  instagramReviews: {
-    title: trimOrEmpty(content.instagramReviews.title),
-    subtitle: trimOrEmpty(content.instagramReviews.subtitle),
-    image: sanitizeImage(content.instagramReviews.image),
-    style: sanitizeSectionStyle(content.instagramReviews.style, DEFAULT_INSTAGRAM_REVIEWS_STYLE),
-  },
-  findUs: {
-    title: trimOrEmpty(content.findUs.title),
-    addressLabel: trimOrEmpty(content.findUs.addressLabel),
-    address: trimOrEmpty(content.findUs.address),
-    cityLabel: trimOrEmpty(content.findUs.cityLabel),
-    city: trimOrEmpty(content.findUs.city),
-    hoursLabel: trimOrEmpty(content.findUs.hoursLabel),
-    hours: trimOrEmpty(content.findUs.hours),
-    mapLabel: trimOrEmpty(content.findUs.mapLabel),
-    style: sanitizeSectionStyle(content.findUs.style, DEFAULT_FIND_US_STYLE),
-  },
-  footer: {
-    text: trimOrEmpty(content.footer.text),
-    style: sanitizeSectionStyle(content.footer.style, DEFAULT_FOOTER_STYLE),
-  },
-  elementStyles: sanitizeElementStyles(content.elementStyles, DEFAULT_ELEMENT_STYLES),
-  elementRichText: sanitizeElementRichText(content.elementRichText, DEFAULT_ELEMENT_RICH_TEXT),
-  assets: sanitizeSiteAssets(content.assets, DEFAULT_SITE_ASSETS),
-});
+    hero: {
+      title: trimOrEmpty(content.hero.title),
+      subtitle: trimOrEmpty(content.hero.subtitle),
+      ctaLabel: trimOrEmpty(content.hero.ctaLabel),
+      backgroundImage: sanitizeImage(content.hero.backgroundImage),
+      historyTitle: trimOrEmpty(content.hero.historyTitle),
+      reorderCtaLabel: trimOrEmpty(content.hero.reorderCtaLabel),
+      style: sanitizeSectionStyle(content.hero.style, base.hero.style),
+    },
+    about: {
+      title: trimOrEmpty(content.about.title),
+      description: trimOrEmpty(content.about.description),
+      image: sanitizeImage(content.about.image),
+      style: sanitizeSectionStyle(content.about.style, base.about.style),
+    },
+    menu: {
+      title: trimOrEmpty(content.menu.title),
+      ctaLabel: trimOrEmpty(content.menu.ctaLabel),
+      loadingLabel: trimOrEmpty(content.menu.loadingLabel),
+      image: sanitizeImage(content.menu.image),
+      style: sanitizeSectionStyle(content.menu.style, base.menu.style),
+    },
+    instagramReviews: {
+      title: trimOrEmpty(content.instagramReviews.title),
+      subtitle: trimOrEmpty(content.instagramReviews.subtitle),
+      image: sanitizeImage(content.instagramReviews.image),
+      style: sanitizeSectionStyle(content.instagramReviews.style, base.instagramReviews.style),
+    },
+    findUs: {
+      title: trimOrEmpty(content.findUs.title),
+      addressLabel: trimOrEmpty(content.findUs.addressLabel),
+      address: trimOrEmpty(content.findUs.address),
+      cityLabel: trimOrEmpty(content.findUs.cityLabel),
+      city: trimOrEmpty(content.findUs.city),
+      hoursLabel: trimOrEmpty(content.findUs.hoursLabel),
+      hours: trimOrEmpty(content.findUs.hours),
+      mapLabel: trimOrEmpty(content.findUs.mapLabel),
+      style: sanitizeSectionStyle(content.findUs.style, base.findUs.style),
+    },
+    footer: {
+      text: trimOrEmpty(content.footer.text),
+      style: sanitizeSectionStyle(content.footer.style, base.footer.style),
+    },
+    elementStyles: sanitizeElementStyles(content.elementStyles, base.elementStyles),
+    elementRichText: sanitizeElementRichText(content.elementRichText, base.elementRichText),
+    assets: sanitizeSiteAssets(content.assets, base.assets),
+  };
+};
+
+
+export const sanitizeSiteContentInput = (content: Partial<SiteContent> | null | undefined): SiteContent => {
+  const base = DEFAULT_SITE_CONTENT;
+  return {
+    navigation: {
+      brand: resolveString(content?.navigation?.brand, base.navigation.brand),
+      brandLogo: sanitizeImage(content?.navigation?.brandLogo),
+      staffLogo: sanitizeImage(content?.navigation?.staffLogo),
+      links: {
+        home: resolveString(content?.navigation?.links?.home, base.navigation.links.home),
+        about: resolveString(content?.navigation?.links?.about, base.navigation.links.about),
+        menu: resolveString(content?.navigation?.links?.menu, base.navigation.links.menu),
+        contact: resolveString(content?.navigation?.links?.contact, base.navigation.links.contact),
+        loginCta: resolveString(content?.navigation?.links?.loginCta, base.navigation.links.loginCta),
+      },
+      style: sanitizeSectionStyle(content?.navigation?.style, base.navigation.style),
+    },
+    hero: {
+      title: resolveString(content?.hero?.title, base.hero.title),
+      subtitle: resolveString(content?.hero?.subtitle, base.hero.subtitle),
+      ctaLabel: resolveString(content?.hero?.ctaLabel, base.hero.ctaLabel),
+      backgroundImage: sanitizeImage(content?.hero?.backgroundImage),
+      historyTitle: resolveString(content?.hero?.historyTitle, base.hero.historyTitle),
+      reorderCtaLabel: resolveString(content?.hero?.reorderCtaLabel, base.hero.reorderCtaLabel),
+      style: sanitizeSectionStyle(content?.hero?.style, base.hero.style),
+    },
+    about: {
+      title: resolveString(content?.about?.title, base.about.title),
+      description: resolveString(content?.about?.description, base.about.description),
+      image: sanitizeImage(content?.about?.image),
+      style: sanitizeSectionStyle(content?.about?.style, base.about.style),
+    },
+    menu: {
+      title: resolveString(content?.menu?.title, base.menu.title),
+      ctaLabel: resolveString(content?.menu?.ctaLabel, base.menu.ctaLabel),
+      loadingLabel: resolveString(content?.menu?.loadingLabel, base.menu.loadingLabel),
+      image: sanitizeImage(content?.menu?.image),
+      style: sanitizeSectionStyle(content?.menu?.style, base.menu.style),
+    },
+    instagramReviews: {
+      title: resolveString(content?.instagramReviews?.title, base.instagramReviews.title),
+      subtitle: resolveString(content?.instagramReviews?.subtitle, base.instagramReviews.subtitle),
+      image: sanitizeImage(content?.instagramReviews?.image),
+      style: sanitizeSectionStyle(content?.instagramReviews?.style, base.instagramReviews.style),
+    },
+    findUs: {
+      title: resolveString(content?.findUs?.title, base.findUs.title),
+      addressLabel: resolveString(content?.findUs?.addressLabel, base.findUs.addressLabel),
+      address: resolveString(content?.findUs?.address, base.findUs.address),
+      cityLabel: resolveString(content?.findUs?.cityLabel, base.findUs.cityLabel),
+      city: resolveString(content?.findUs?.city, base.findUs.city),
+      hoursLabel: resolveString(content?.findUs?.hoursLabel, base.findUs.hoursLabel),
+      hours: resolveString(content?.findUs?.hours, base.findUs.hours),
+      mapLabel: resolveString(content?.findUs?.mapLabel, base.findUs.mapLabel),
+      style: sanitizeSectionStyle(content?.findUs?.style, base.findUs.style),
+    },
+    footer: {
+      text: resolveString(content?.footer?.text, base.footer.text),
+      style: sanitizeSectionStyle(content?.footer?.style, base.footer.style),
+    },
+    elementStyles: sanitizeElementStyles(content?.elementStyles, base.elementStyles),
+    elementRichText: sanitizeElementRichText(content?.elementRichText, base.elementRichText),
+    assets: sanitizeSiteAssets(content?.assets, base.assets),
+  };
+};
+
